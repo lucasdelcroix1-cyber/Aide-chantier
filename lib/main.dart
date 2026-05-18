@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'core/models/renovation_project.dart';
+import 'core/services/calculation_service.dart';
+
 void main() {
   runApp(const RenovPrixApp());
 }
@@ -13,8 +16,8 @@ class RenovPrixApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'RénovPrix',
       theme: ThemeData(
-        colorSchemeSeed: Colors.blue,
         useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
       ),
       home: const HomePage(),
     );
@@ -29,22 +32,35 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final longueurController = TextEditingController();
-  final largeurController = TextEditingController();
+  final nameController = TextEditingController();
+  final lengthController = TextEditingController();
+  final widthController = TextEditingController();
+  final heightController = TextEditingController(text: '2.5');
 
-  double surface = 0;
-  double total = 0;
+  QualityLevel qualityLevel = QualityLevel.standard;
+  RenovationType renovationType = RenovationType.carrelage;
 
-  void calculer() {
-    final longueur = double.tryParse(longueurController.text) ?? 0;
-    final largeur = double.tryParse(largeurController.text) ?? 0;
+  CalculationResult? result;
 
-    final resultat = longueur * largeur;
-    final estimation = resultat * 42;
+  void calculateProject() {
+    final project = RenovationProject(
+      name: nameController.text.isEmpty
+          ? 'Projet rénovation'
+          : nameController.text,
+      roomType: RoomType.salon,
+      renovationType: renovationType,
+      length: double.tryParse(lengthController.text) ?? 0,
+      width: double.tryParse(widthController.text) ?? 0,
+      height: double.tryParse(heightController.text) ?? 2.5,
+      wastePercent: 10,
+      qualityLevel: qualityLevel,
+      includeTools: true,
+      includeConsumables: true,
+      installedByArtisan: false,
+    );
 
     setState(() {
-      surface = resultat;
-      total = estimation;
+      result = CalculationService.calculate(project);
     });
   }
 
@@ -54,21 +70,29 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('RénovPrix'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Estimation rapide rénovation',
+              'Assistant rénovation intérieure',
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 20),
             TextField(
-              controller: longueurController,
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nom du projet',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: lengthController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Longueur (m)',
@@ -77,41 +101,106 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: largeurController,
+              controller: widthController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Largeur (m)',
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: heightController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Hauteur (m)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<RenovationType>(
+              value: renovationType,
+              decoration: const InputDecoration(
+                labelText: 'Type de rénovation',
+                border: OutlineInputBorder(),
+              ),
+              items: RenovationType.values.map((type) {
+                return DropdownMenuItem(
+                  value: type,
+                  child: Text(type.name),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  renovationType = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<QualityLevel>(
+              value: qualityLevel,
+              decoration: const InputDecoration(
+                labelText: 'Niveau de gamme',
+                border: OutlineInputBorder(),
+              ),
+              items: QualityLevel.values.map((level) {
+                return DropdownMenuItem(
+                  value: level,
+                  child: Text(level.name),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  qualityLevel = value!;
+                });
+              },
+            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: calculer,
-                child: const Text('Calculer le chantier'),
+                onPressed: calculateProject,
+                child: const Text('Calculer le projet'),
               ),
             ),
             const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Surface : ${surface.toStringAsFixed(2)} m²'),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Budget estimé : ${total.toStringAsFixed(2)} €',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
+            if (result != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Surface : ${result!.surface.toStringAsFixed(2)} m²',
                       ),
-                    ),
-                  ],
+                      Text(
+                        'Matériaux : ${result!.materialQuantity.toStringAsFixed(2)} m²',
+                      ),
+                      Text(
+                        'Colle : ${result!.glueQuantity.toStringAsFixed(2)} kg',
+                      ),
+                      Text(
+                        'Joints : ${result!.jointQuantity.toStringAsFixed(2)} kg',
+                      ),
+                      Text(
+                        'Peinture : ${result!.paintQuantity.toStringAsFixed(2)} L',
+                      ),
+                      Text(
+                        'Plinthes : ${result!.skirtingQuantity.toStringAsFixed(2)} m',
+                      ),
+                      const Divider(),
+                      Text(
+                        'Budget estimé : ${result!.estimatedBudget.toStringAsFixed(2)} €',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
